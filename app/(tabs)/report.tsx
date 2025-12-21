@@ -14,6 +14,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'expo-router';
 import { diaryService, EmotionReport } from '@/services/api';
 import { Palette, FontSize, FontWeight, Spacing, BorderRadius, Shadows } from '@/constants/theme';
+import { IconSymbol } from '@/components/ui/icon-symbol';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const HIDE_BANNER_KEY = 'hideDataBannerUntil';
@@ -41,11 +42,21 @@ const EMOTION_EMOJIS: Record<string, string> = {
     love: '🥰',
 };
 
+// 연간 리포트 타입
+interface AnnualReport {
+    year: number;
+    total_diaries: number;
+    monthly_stats: { month: number; count: number; dominant_emotion: string | null }[];
+    emotion_stats: { emotion: string; label: string; count: number; percentage: number }[];
+}
+
 export default function ReportScreen() {
     const router = useRouter();
     const { isAuthenticated } = useAuth();
-    const [period, setPeriod] = useState<'week' | 'month'>('week');
+    const [period, setPeriod] = useState<'week' | 'month' | 'year'>('week');
     const [report, setReport] = useState<EmotionReport | null>(null);
+    const [annualReport, setAnnualReport] = useState<AnnualReport | null>(null);
+    const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
     const [loading, setLoading] = useState(true);
     const [showBanner, setShowBanner] = useState(true);
 
@@ -85,19 +96,33 @@ export default function ReportScreen() {
 
         setLoading(true);
         try {
-            const data = await diaryService.getReport(period);
-            setReport(data);
+            if (period === 'year') {
+                const data = await diaryService.getAnnualReport(selectedYear);
+                setAnnualReport(data);
+                setReport(null);
+            } else {
+                const data = await diaryService.getReport(period);
+                setReport(data);
+                setAnnualReport(null);
+            }
         } catch (error) {
             console.error('Failed to fetch report:', error);
         } finally {
             setLoading(false);
         }
-    }, [period, isAuthenticated]);
+    }, [period, selectedYear, isAuthenticated]);
 
     useEffect(() => {
         checkBannerVisibility();
         fetchReport();
     }, [checkBannerVisibility, fetchReport]);
+
+    // 월 이름 변환
+    const getMonthName = (month: number): string => {
+        const months = ['1월', '2월', '3월', '4월', '5월', '6월',
+            '7월', '8월', '9월', '10월', '11월', '12월'];
+        return months[month - 1] || '';
+    };
 
     if (!isAuthenticated) {
         return (
@@ -156,10 +181,42 @@ export default function ReportScreen() {
                         한 달
                     </Text>
                 </TouchableOpacity>
+                <TouchableOpacity
+                    style={[styles.periodButton, period === 'year' && styles.periodButtonActive]}
+                    onPress={() => setPeriod('year')}
+                >
+                    <Text style={[styles.periodButtonText, period === 'year' && styles.periodButtonTextActive]}>
+                        연간
+                    </Text>
+                </TouchableOpacity>
             </View>
 
+            {/* 연도 선택 (연간 리포트일 때만) */}
+            {period === 'year' && (
+                <View style={styles.yearSelector}>
+                    <TouchableOpacity
+                        style={styles.yearButton}
+                        onPress={() => setSelectedYear(prev => prev - 1)}
+                    >
+                        <IconSymbol name="chevron.left" size={20} color={Palette.neutral[600]} />
+                    </TouchableOpacity>
+                    <Text style={styles.yearText}>{selectedYear}년</Text>
+                    <TouchableOpacity
+                        style={styles.yearButton}
+                        onPress={() => setSelectedYear(prev => Math.min(prev + 1, new Date().getFullYear()))}
+                        disabled={selectedYear >= new Date().getFullYear()}
+                    >
+                        <IconSymbol
+                            name="chevron.right"
+                            size={20}
+                            color={selectedYear >= new Date().getFullYear() ? Palette.neutral[300] : Palette.neutral[600]}
+                        />
+                    </TouchableOpacity>
+                </View>
+            )}
+
             {/* 데이터 부족 안내 배너 */}
-            {showBanner && report && !report.data_sufficient && (
+            {showBanner && report && !report.data_sufficient && period !== 'year' && (
                 <View style={styles.dataBanner}>
                     <Text style={styles.dataBannerTitle}>
                         더 많은 일기가 더 정확한 분석을 만들어요
@@ -175,8 +232,75 @@ export default function ReportScreen() {
                 </View>
             )}
 
-            {/* 인사이트 카드 */}
-            {report && report.dominant_emotion && (
+            {/* 연간 리포트 */}
+            {period === 'year' && annualReport && (
+                <>
+                    {/* 연간 요약 카드 */}
+                    <LinearGradient
+                        colors={['#E8F5E9', '#F1F8E9']}
+                        style={styles.insightCard}
+                    >
+                        <Text style={styles.yearSummaryEmoji}>📅</Text>
+                        <Text style={styles.insightText}>
+                            {selectedYear}년에 총 {annualReport.total_diaries}개의 일기를 작성했어요
+                        </Text>
+                        {annualReport.emotion_stats.length > 0 && (
+                            <Text style={styles.insightCount}>
+                                가장 많이 느낀 감정: {EMOTION_EMOJIS[annualReport.emotion_stats[0]?.emotion] || ''} {annualReport.emotion_stats[0]?.label}
+                            </Text>
+                        )}
+                    </LinearGradient>
+
+                    {/* 월별 통계 */}
+                    <View style={styles.statsContainer}>
+                        <Text style={styles.sectionTitle}>📈 월별 일기 현황</Text>
+                        <View style={styles.monthlyGrid}>
+                            {annualReport.monthly_stats.map((stat) => (
+                                <View key={stat.month} style={styles.monthCard}>
+                                    <Text style={styles.monthName}>{getMonthName(stat.month)}</Text>
+                                    <Text style={styles.monthCount}>{stat.count}개</Text>
+                                    {stat.dominant_emotion && (
+                                        <Text style={styles.monthEmotion}>
+                                            {EMOTION_EMOJIS[stat.dominant_emotion]}
+                                        </Text>
+                                    )}
+                                </View>
+                            ))}
+                        </View>
+                    </View>
+
+                    {/* 연간 감정 통계 */}
+                    {annualReport.emotion_stats.length > 0 && (
+                        <View style={styles.statsContainer}>
+                            <Text style={styles.sectionTitle}>😊 연간 감정 분포</Text>
+                            {annualReport.emotion_stats.map((stat) => (
+                                <View key={stat.emotion} style={styles.statRow}>
+                                    <View style={styles.statInfo}>
+                                        <Text style={styles.statEmoji}>{EMOTION_EMOJIS[stat.emotion]}</Text>
+                                        <Text style={styles.statLabel}>{stat.label}</Text>
+                                        <Text style={styles.statCount}>{stat.count}회</Text>
+                                    </View>
+                                    <View style={styles.statBarContainer}>
+                                        <View
+                                            style={[
+                                                styles.statBar,
+                                                {
+                                                    width: `${stat.percentage}%`,
+                                                    backgroundColor: EMOTION_COLORS[stat.emotion],
+                                                },
+                                            ]}
+                                        />
+                                    </View>
+                                    <Text style={styles.statPercentage}>{stat.percentage}%</Text>
+                                </View>
+                            ))}
+                        </View>
+                    )}
+                </>
+            )}
+
+            {/* 주간/월간 리포트 - 인사이트 카드 */}
+            {period !== 'year' && report && report.dominant_emotion && (
                 <LinearGradient
                     colors={[
                         EMOTION_COLORS[report.dominant_emotion.emotion] + '20',
@@ -194,8 +318,8 @@ export default function ReportScreen() {
                 </LinearGradient>
             )}
 
-            {/* 감정 통계 */}
-            {report && report.emotion_stats.length > 0 ? (
+            {/* 주간/월간 감정 통계 */}
+            {period !== 'year' && report && report.emotion_stats.length > 0 ? (
                 <View style={styles.statsContainer}>
                     <Text style={styles.sectionTitle}>감정 분포</Text>
 
@@ -221,7 +345,7 @@ export default function ReportScreen() {
                         </View>
                     ))}
                 </View>
-            ) : (
+            ) : period !== 'year' && (
                 <View style={styles.emptyContainer}>
                     <Text style={styles.emptyEmoji}>📝</Text>
                     <Text style={styles.emptyTitle}>아직 분석할 일기가 없어요</Text>
@@ -234,6 +358,17 @@ export default function ReportScreen() {
                     >
                         <Text style={styles.writeButtonText}>일기 작성하기</Text>
                     </TouchableOpacity>
+                </View>
+            )}
+
+            {/* 연간 리포트 빈 상태 */}
+            {period === 'year' && annualReport && annualReport.total_diaries === 0 && (
+                <View style={styles.emptyContainer}>
+                    <Text style={styles.emptyEmoji}>📅</Text>
+                    <Text style={styles.emptyTitle}>{selectedYear}년 일기가 없어요</Text>
+                    <Text style={styles.emptySubtitle}>
+                        다른 연도를 선택하거나{'\n'}새 일기를 작성해보세요
+                    </Text>
                 </View>
             )}
 
@@ -486,5 +621,66 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontSize: FontSize.md,
         fontWeight: FontWeight.semibold,
+    },
+
+    // 연도 선택
+    yearSelector: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: Spacing.lg,
+        paddingHorizontal: Spacing.lg,
+    },
+    yearButton: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: '#fff',
+        justifyContent: 'center',
+        alignItems: 'center',
+        ...Shadows.sm,
+    },
+    yearText: {
+        fontSize: FontSize.xl,
+        fontWeight: FontWeight.bold,
+        color: Palette.neutral[900],
+        marginHorizontal: Spacing.xl,
+    },
+
+    // 연간 요약
+    yearSummaryEmoji: {
+        fontSize: 48,
+        marginBottom: Spacing.md,
+    },
+
+    // 월별 그리드
+    monthlyGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        marginHorizontal: -4,
+    },
+    monthCard: {
+        width: '25%',
+        padding: 4,
+    },
+    monthCardInner: {
+        backgroundColor: Palette.neutral[50],
+        borderRadius: BorderRadius.md,
+        padding: Spacing.sm,
+        alignItems: 'center',
+    },
+    monthName: {
+        fontSize: FontSize.sm,
+        color: Palette.neutral[600],
+        marginBottom: 2,
+    },
+    monthCount: {
+        fontSize: FontSize.md,
+        fontWeight: FontWeight.bold,
+        color: Palette.neutral[900],
+    },
+    monthEmotion: {
+        fontSize: 16,
+        marginTop: 2,
     },
 });

@@ -18,6 +18,18 @@ import { PreviewModal } from '@/components/diary/PreviewModal';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Palette, FontSize, FontWeight, Spacing, BorderRadius, Shadows } from '@/constants/theme';
 
+// 위치 카테고리 목록
+const LOCATION_CATEGORIES = [
+    { id: 'home', emoji: '🏠', label: '집' },
+    { id: 'work', emoji: '🏢', label: '회사/학교' },
+    { id: 'cafe', emoji: '☕', label: '카페' },
+    { id: 'restaurant', emoji: '🍽️', label: '식당' },
+    { id: 'park', emoji: '🌳', label: '공원' },
+    { id: 'gym', emoji: '🏋️', label: '헬스장' },
+    { id: 'travel', emoji: '✈️', label: '여행' },
+    { id: 'other', emoji: '📍', label: '기타' },
+];
+
 export default function CreateDiaryScreen() {
     const router = useRouter();
     const [title, setTitle] = useState('');
@@ -27,6 +39,11 @@ export default function CreateDiaryScreen() {
     const [isLoading, setIsLoading] = useState(false);
     const [errors, setErrors] = useState<{ title?: string; content?: string }>({});
 
+    // 위치 관련 상태
+    const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
+    const [locationName, setLocationName] = useState('');
+    const [showLocationInput, setShowLocationInput] = useState(false);
+
     const handleTranscription = useCallback((text: string) => {
         setContent((prev) => {
             if (prev.trim()) {
@@ -35,6 +52,24 @@ export default function CreateDiaryScreen() {
             return text;
         });
     }, []);
+
+    const handleLocationSelect = (locationId: string) => {
+        if (selectedLocation === locationId) {
+            setSelectedLocation(null);
+            setShowLocationInput(false);
+            setLocationName('');
+        } else {
+            setSelectedLocation(locationId);
+            // 기타를 선택하면 직접 입력 표시
+            if (locationId === 'other') {
+                setShowLocationInput(true);
+            } else {
+                setShowLocationInput(false);
+                const category = LOCATION_CATEGORIES.find(c => c.id === locationId);
+                setLocationName(category?.label || '');
+            }
+        }
+    };
 
     const handleSavePress = () => {
         const newErrors: { title?: string; content?: string } = {};
@@ -61,7 +96,11 @@ export default function CreateDiaryScreen() {
     const handleConfirmSave = async () => {
         setIsLoading(true);
         try {
-            await diaryService.create({ title: title.trim(), content: content.trim() });
+            await diaryService.create({
+                title: title.trim(),
+                content: content.trim(),
+                location_name: locationName.trim() || null,
+            });
             setShowPreview(false);
             Alert.alert('저장 완료 ✨', '일기가 안전하게 저장되었습니다', [
                 { text: '확인', onPress: () => router.back() },
@@ -128,6 +167,55 @@ export default function CreateDiaryScreen() {
                                 </TouchableOpacity>
                             ))}
                         </View>
+                    </View>
+
+                    {/* 위치 선택 */}
+                    <View style={styles.locationSection}>
+                        <Text style={styles.moodLabel}>📍 장소</Text>
+                        <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            contentContainerStyle={styles.locationOptions}
+                        >
+                            {LOCATION_CATEGORIES.map((loc) => (
+                                <TouchableOpacity
+                                    key={loc.id}
+                                    style={[
+                                        styles.locationButton,
+                                        selectedLocation === loc.id && styles.locationButtonActive
+                                    ]}
+                                    onPress={() => handleLocationSelect(loc.id)}
+                                >
+                                    <Text style={styles.locationEmoji}>{loc.emoji}</Text>
+                                    <Text style={[
+                                        styles.locationLabel,
+                                        selectedLocation === loc.id && styles.locationLabelActive
+                                    ]}>
+                                        {loc.label}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
+
+                        {/* 기타 선택 시 직접 입력 */}
+                        {showLocationInput && (
+                            <TextInput
+                                style={styles.locationInput}
+                                placeholder="장소명을 입력하세요"
+                                placeholderTextColor={Palette.neutral[400]}
+                                value={locationName}
+                                onChangeText={setLocationName}
+                            />
+                        )}
+
+                        {/* 선택된 위치 표시 */}
+                        {selectedLocation && !showLocationInput && (
+                            <View style={styles.selectedLocationBadge}>
+                                <Text style={styles.selectedLocationText}>
+                                    {LOCATION_CATEGORIES.find(c => c.id === selectedLocation)?.emoji} {locationName}
+                                </Text>
+                            </View>
+                        )}
                     </View>
 
                     {/* 제목 입력 */}
@@ -331,5 +419,59 @@ const styles = StyleSheet.create({
     securityText: {
         fontSize: FontSize.sm,
         color: Palette.secondary[500],
+    },
+
+    // 위치 선택
+    locationSection: {
+        marginBottom: Spacing.xl,
+    },
+    locationOptions: {
+        gap: Spacing.sm,
+        paddingVertical: Spacing.xs,
+    },
+    locationButton: {
+        paddingHorizontal: Spacing.md,
+        paddingVertical: Spacing.sm,
+        borderRadius: BorderRadius.full,
+        backgroundColor: '#fff',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.xs,
+        ...Shadows.sm,
+    },
+    locationButtonActive: {
+        backgroundColor: Palette.primary[500],
+    },
+    locationEmoji: {
+        fontSize: 16,
+    },
+    locationLabel: {
+        fontSize: FontSize.sm,
+        color: Palette.neutral[700],
+    },
+    locationLabelActive: {
+        color: '#fff',
+    },
+    locationInput: {
+        marginTop: Spacing.md,
+        backgroundColor: '#fff',
+        borderRadius: BorderRadius.md,
+        padding: Spacing.md,
+        fontSize: FontSize.md,
+        color: Palette.neutral[900],
+        borderWidth: 1,
+        borderColor: Palette.neutral[200],
+    },
+    selectedLocationBadge: {
+        marginTop: Spacing.sm,
+        paddingHorizontal: Spacing.md,
+        paddingVertical: Spacing.xs,
+        backgroundColor: Palette.primary[50],
+        borderRadius: BorderRadius.full,
+        alignSelf: 'flex-start',
+    },
+    selectedLocationText: {
+        fontSize: FontSize.sm,
+        color: Palette.primary[600],
     },
 });

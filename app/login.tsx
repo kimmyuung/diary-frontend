@@ -102,6 +102,13 @@ export default function LoginScreen() {
                         </View>
 
                         <TouchableOpacity
+                            style={styles.forgotPassword}
+                            onPress={() => router.push('/forgot-password' as any)}
+                        >
+                            <Text style={styles.forgotPasswordText}>비밀번호를 잊으셨나요?</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
                             style={[styles.loginButton, isLoading && styles.loginButtonDisabled]}
                             onPress={handleLogin}
                             disabled={isLoading}
@@ -140,11 +147,16 @@ export default function LoginScreen() {
                     <View style={styles.footer}>
                         <Text style={styles.footerText}>
                             계정이 없으신가요?{' '}
-                            <Text style={styles.signupLink}>회원가입</Text>
+                            <Text
+                                style={styles.signupLink}
+                                onPress={() => router.push('/register' as any)}
+                            >
+                                회원가입
+                            </Text>
                         </Text>
                     </View>
                 </KeyboardAvoidingView>
-            </LinearGradient>
+            </LinearGradient >
         </>
     );
 }
@@ -272,5 +284,13 @@ const styles = StyleSheet.create({
     signupLink: {
         color: Palette.primary[500],
         fontWeight: FontWeight.bold,
+    },
+    forgotPassword: {
+        alignItems: 'flex-end',
+        marginBottom: Spacing.md,
+    },
+    forgotPasswordText: {
+        fontSize: FontSize.sm,
+        color: Palette.neutral[500],
     },
 });

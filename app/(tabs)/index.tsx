@@ -7,7 +7,6 @@ import {
     StyleSheet,
     RefreshControl,
     Alert,
-    ActivityIndicator,
     Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -15,6 +14,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { diaryService, Diary } from '@/services/api';
 import { DiaryCard } from '@/components/diary/DiaryCard';
+import { DiaryListSkeleton } from '@/components/Skeleton';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Palette, FontSize, FontWeight, Spacing, BorderRadius, Shadows } from '@/constants/theme';
 
@@ -108,7 +108,10 @@ export default function DiaryListScreen() {
     if (loading) {
         return (
             <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color={Palette.primary[500]} />
+                <View style={styles.header}>
+                    <Text style={styles.headerTitle}>나의 일기</Text>
+                </View>
+                <DiaryListSkeleton count={4} />
             </View>
         );
     }
